@@ -62,10 +62,12 @@ class AuthController extends ChangeNotifier {
     _unLoading();
   }
 
-  Future createAccount(
+  Future<bool> createAccount(
       {required String name,
       required String email,
-      required String password}) async {
+      required String password,
+      File? file}) async {
+    bool created = false;
     _loading();
     await _firebaseMethod.createAccountWithEmailAndPassword(
         email: email,
@@ -75,7 +77,18 @@ class AuthController extends ChangeNotifier {
           appUser = user;
           authStatus = AuthStatus.authenticate;
           _unLoading();
+          created = true;
+        },
+        onError: () {
+          created = false;
         });
+    return created;
+  }
+
+  Future signInWithGoogle() async {
+    _loading();
+    await _firebaseMethod.signInWithGoogle();
+    _unLoading();
   }
 
   Future<bool> updateUser({required String displayName, File? avatar}) async {
@@ -87,7 +100,7 @@ class AuthController extends ChangeNotifier {
               displayName.isEmpty ? appUser!.displayName! : displayName,
           avatar: avatar);
       appUser = await _firebaseMethod.getUser(appUser!.uid!);
-      Utils.showToast("Cập nhật thành công");
+      Utils.showToast("Updated Successfully");
       _unLoading();
       return true;
     } on FirebaseException catch (e) {

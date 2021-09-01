@@ -1,9 +1,11 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class RoomChat {
   String? id;
   List<String>? membersId;
   String? message;
   String? senderId;
-  int? timeStamp;
+  Timestamp? timeStamp;
 
   RoomChat(
       {this.id, this.membersId, this.message, this.senderId, this.timeStamp});
@@ -24,7 +26,7 @@ class RoomChat {
     if (this.membersId != null) data["members_id"] = this.membersId;
     data["message"] = this.message;
     data["sender_id"] = this.senderId;
-    data["time_stamp"] = this.timeStamp;
+    data["time_stamp"] = FieldValue.serverTimestamp();
     return data;
   }
 }

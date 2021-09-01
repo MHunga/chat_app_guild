@@ -1,11 +1,14 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class Message {
   String? id;
   String? roomChatId;
   String? message;
   String? senderId;
   String? senderName;
-  int? timeStamp;
+  Timestamp? timeStamp;
   List<String>? medias;
+  String? type;
   Message(
       {this.id,
       this.roomChatId,
@@ -13,7 +16,8 @@ class Message {
       this.senderId,
       this.senderName,
       this.timeStamp,
-      this.medias});
+      this.medias,
+      this.type});
 
   Message.fromJson(Map<String, dynamic> json) {
     this.id = json["id"];
@@ -24,6 +28,7 @@ class Message {
     this.senderId = json["sender_id"];
     this.senderName = json["sender_name"];
     this.timeStamp = json["time_stamp"];
+    this.type = json["type"];
   }
 
   Map<String, dynamic> toJson() {
@@ -34,7 +39,8 @@ class Message {
     data["sender_id"] = this.senderId;
     data["sender_name"] = this.senderName;
     data["medias"] = this.medias;
-    data["time_stamp"] = this.timeStamp;
+    data["time_stamp"] = FieldValue.serverTimestamp();
+    data["type"] = this.type;
     return data;
   }
 }

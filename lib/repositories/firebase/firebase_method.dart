@@ -7,43 +7,53 @@ import 'package:chat_app/utils/utils.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:uuid/uuid.dart';
 
 class FirebaseMethod {
   FirebaseAuth _auth = FirebaseAuth.instance;
   FirebaseFirestore _firestore = FirebaseFirestore.instance;
   FirebaseStorage _storage = FirebaseStorage.instance;
+  GoogleSignIn _googleSignIn = GoogleSignIn();
 
   Stream<User?> userChangeStream() async* {
     yield* _auth.userChanges();
   }
 
-  Future createAccountWithEmailAndPassword(
-      {required String email,
-      required String password,
-      required String name,
-      Function(AppUser)? onDone}) async {
+  Future createAccountWithEmailAndPassword({
+    required String email,
+    required String password,
+    required String name,
+    File? avatar,
+    Function(AppUser)? onDone,
+    Function? onError,
+  }) async {
     try {
       await _auth
           .createUserWithEmailAndPassword(email: email, password: password)
           .then((value) async {
         if (value.user != null) {
+          String? photoUrl;
+          if (avatar != null) {
+            photoUrl = await uploadFile(value.user!.uid, avatar);
+          }
           final appUser = AppUser(
               uid: value.user!.uid,
               displayName: name,
               email: value.user!.email,
-              photoUrl: value.user!.photoURL);
+              photoUrl: photoUrl);
           await createUserToDatabase(appUser).then((value) => onDone!(appUser));
         }
       });
-      Utils.showToast("Đăng nhập thành công");
+      Utils.showToast("Signed up successfully");
     } on FirebaseAuthException catch (e) {
+      onError!();
       if (e.code == 'weak-password') {
-        Utils.showToast("Mật khẩu quá yếu");
+        Utils.showToast("The password provided is too weak.");
       } else if (e.code == 'email-already-in-use') {
-        Utils.showToast("Tài khoản đã tồn tại");
+        Utils.showToast("The account already exists for that email.");
       } else {
-        Utils.showToast("Có lỗi xảy ra, Vui lòng thử lại sau!");
+        Utils.showToast(e.message ?? "");
       }
     }
   }
@@ -52,19 +62,48 @@ class FirebaseMethod {
       {required String email, required String password}) async {
     try {
       await _auth.signInWithEmailAndPassword(email: email, password: password);
-      Utils.showToast("Đăng nhập thành công");
+      Utils.showToast("Logged in successfully");
     } on FirebaseAuthException catch (e) {
       if (e.code == 'user-not-found') {
-        Utils.showToast("Không tìm thấy người dùng nào cho email này.");
+        Utils.showToast("No user found for that email.");
       } else if (e.code == 'wrong-password') {
-        Utils.showToast("Sai mật khẩu!");
+        Utils.showToast("Wrong password provided for that user.");
       } else {
-        Utils.showToast("Có lỗi xảy ra, Vui lòng thử lại sau!");
+        Utils.showToast(e.message ?? "");
       }
     }
   }
 
+  Future signInWithGoogle() async {
+    UserCredential? user;
+    try {
+      GoogleSignInAccount? _signInAccount = await _googleSignIn.signIn();
+      if (_signInAccount != null) {
+        GoogleSignInAuthentication _signInAuthentication =
+            await _signInAccount.authentication;
+
+        final AuthCredential credential = GoogleAuthProvider.credential(
+            accessToken: _signInAuthentication.accessToken,
+            idToken: _signInAuthentication.idToken);
+
+        user = await _auth.signInWithCredential(credential);
+
+        if (user.user != null) {
+          final appUser = AppUser(
+              uid: user.user!.uid,
+              displayName: user.user!.displayName ?? "",
+              email: user.user!.email,
+              photoUrl: user.user!.photoURL);
+          await createUserToDatabase(appUser);
+        }
+      }
+    } on FirebaseAuthException catch (e) {
+      Utils.showToast(e.message ?? "");
+    }
+  }
+
   Future signOut() async {
+    _googleSignIn.signOut();
     return _auth.signOut();
   }
 
@@ -91,6 +130,16 @@ class FirebaseMethod {
         .collection("chats")
         .doc(roomChat.id)
         .set(roomChat.toJson());
+  }
+
+  Future updateMessageMedias(
+      List<String> medias, String roomChatId, String messageId) async {
+    await _firestore
+        .collection("chats")
+        .doc(roomChatId)
+        .collection("messages")
+        .doc(messageId)
+        .update({"medias": medias});
   }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> getStreamRoomChat(
@@ -162,6 +211,17 @@ class FirebaseMethod {
     try {
       final uploaTask =
           await _storage.ref('users/$userId/$fileName.jpg').putFile(file);
+      return uploaTask.ref.getDownloadURL();
+    } on FirebaseException catch (e) {
+      Utils.showToast(e.message ?? "");
+    }
+  }
+
+  Future<String?> uploadFileMessage(String userId, File file) async {
+    String fileName = Uuid().v4();
+    try {
+      final uploaTask =
+          await _storage.ref('message/$userId/$fileName').putFile(file);
       return uploaTask.ref.getDownloadURL();
     } on FirebaseException catch (e) {
       Utils.showToast(e.message ?? "");
